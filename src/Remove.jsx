@@ -16,17 +16,17 @@ const MODELS = [
         outputType: "u2net",
         executionProviders: ["wasm"], // MaxPool ceil_mode is unsupported in WebGPU
     },
-    {
-        name: "BRIA RMBG (INT8 Quantized - 44MB)",
-        url: "https://models.stupidgeek.org/models/rmbg_quantized.onnx",
-        inputSize: 1024,
-        inputName: "input",
-        outputName: "output",
-        mean: [0.5, 0.5, 0.5],
-        std: [1.0, 1.0, 1.0],
-        outputType: "u2net",
-        executionProviders: ["webgpu"], // INT8 ops run best on CPU/WASM
-    },
+    // {
+    //     name: "BRIA RMBG (INT8 Quantized - 44MB)",
+    //     url: "https://models.stupidgeek.org/models/rmbg_quantized.onnx",
+    //     inputSize: 1024,
+    //     inputName: "input",
+    //     outputName: "output",
+    //     mean: [0.5, 0.5, 0.5],
+    //     std: [1.0, 1.0, 1.0],
+    //     outputType: "u2net",
+    //     executionProviders: ["webgpu"], // INT8 ops run best on CPU/WASM
+    // },
     {
         name: "BRIA RMBG (FP16 - 88MB)",
         url: "https://models.stupidgeek.org/models/rmbg_fp16.onnx",
