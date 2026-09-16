@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import { getCachedModel, cacheModel } from "./utils/modelCache";
 
 const MODEL_SIZE = 320;
 
@@ -8,10 +9,10 @@ const STD = [0.229, 0.224, 0.225];
 
 function App() {
   const SILUETA_URL = "https://models.stupidgeek.org/models/silueta.onnx"
-  const U2NETP_URL = "/models/u2netp.onnx"
+  const U2NETP_URL = "https://models.stupidgeek.org/models/u2netp.onnx"
 
   const [fileName, setFileName] = useState(null);
-  const [model, setModel] = useState("/models/u2netp.onnx");
+  const [model, setModel] = useState(SILUETA_URL);
   const [session, setSession] = useState(null);
   const [currentImage, setCurrentImage] = useState(null);
 
@@ -27,30 +28,80 @@ function App() {
   const inputCanvasRef = useRef(null);
   const outputCanvasRef = useRef(null);
 
+  // async function loadModel(model) {
+  //   try {
+  //     ort.env.wasm.wasmPaths =
+  //       "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
+
+  //     const loadedSession = await ort.InferenceSession.create(
+  //       model,
+  //       {
+  //         executionProviders: ["wasm"],
+  //         graphOptimizationLevel: "all",
+  //       }
+  //     );
+  //     return loadedSession;
+  //   } catch (err) {
+  //     console.error(err);
+  //     setStatus(`Failed to load model: ${err.message}`);
+  //   }
+  // }
+
+
   async function loadModel(model) {
     try {
+      setStatus("Loading model...");
+      setStatusMode("loading");
+
+      let modelData = await getCachedModel(model);
+
+      if (modelData) {
+        console.log("Loading model from IndexedDB");
+      } else {
+        console.log("Downloading model...");
+
+        const response = await fetch(model);
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to download model: ${response.status}`
+          );
+        }
+
+        modelData = await response.arrayBuffer();
+
+        await cacheModel(model, modelData);
+
+        console.log("Model saved to IndexedDB");
+      }
+
       ort.env.wasm.wasmPaths =
         "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 
       const loadedSession = await ort.InferenceSession.create(
-        model,
+        modelData,
         {
           executionProviders: ["wasm"],
           graphOptimizationLevel: "all",
         }
       );
+
       return loadedSession;
+
     } catch (err) {
       console.error(err);
       setStatus(`Failed to load model: ${err.message}`);
+      setStatusMode("error");
+
+      return null;
     }
   }
 
   // Load ONNX model
   useEffect(() => {
-    setStatus(`Loading Model ${model}`)
-    setStatusMode("busy");
-    console.log(model)
+    // setStatus(`Loading Model ${model}`)
+    // setStatusMode("busy");
+    // console.log(model)
     async function load() {
       const loadedSession = await loadModel(model);
 
