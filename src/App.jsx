@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import KofiTipJar from "./components/KofiTipJar";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <p className="mt-4 text-xs text-zinc-400">
             No account · No uploads · No nonsense
           </p>
+          <KofiTipJar />
         </div>
       </section>
 
@@ -71,7 +73,7 @@ function App() {
                     {/* <div className="text-4xl">🧑‍💻</div> */}
                     <div className="text-4xl">
                       <img
-                        src="../public/KanyeWest.jpg"
+                        src="/KanyeWest.jpg"
                       />
                     </div>
                     <p className="mt-3 text-xs text-zinc-400">
@@ -96,7 +98,7 @@ function App() {
                   <div className="text-center">
                     <div className="text-4xl">
                       <img
-                        src="../public/removed-KanyeWest.png"
+                        src="/removed-KanyeWest.png"
                       />
                     </div>
                     <p className="mt-3 text-xs text-zinc-400">
