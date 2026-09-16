@@ -8,7 +8,7 @@ const STD = [0.229, 0.224, 0.225];
 
 function App() {
   const [fileName, setFileName] = useState(null);
-  const [model, setModel] = useState("u2netp");
+  const [model, setModel] = useState("/models/u2netp.onnx");
   const [session, setSession] = useState(null);
   const [currentImage, setCurrentImage] = useState(null);
 
@@ -30,7 +30,7 @@ function App() {
         "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 
       const loadedSession = await ort.InferenceSession.create(
-        `/models/${model}.onnx`,
+        model,
         {
           executionProviders: ["wasm"],
           graphOptimizationLevel: "all",
@@ -45,6 +45,9 @@ function App() {
 
   // Load ONNX model
   useEffect(() => {
+    setStatus(`Loading Model ${model}`)
+    setStatusMode("busy");
+    console.log(model)
     async function load() {
       const loadedSession = await loadModel(model);
 
@@ -285,8 +288,8 @@ function App() {
           value={model}
           onChange={(e) => setModel(e.target.value)}
         >
-          <option value="u2netp">U²-NetP (4MB)</option>
-          <option value="silueta">Silueta (43MB)</option>
+          <option value="/models/u2netp.onnx">U²-NetP (4MB)</option>
+          <option value="https:/models.stupidgeek.org/models/silueta.onnx">Silueta (43MB)</option>
         </select>
       </div>
 
