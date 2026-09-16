@@ -38,17 +38,17 @@ const MODELS = [
         outputType: "u2net",
         executionProviders: ["webgpu", "wasm"], // Best on GPU, falls back to WASM
     },
-    {
-        name: "BRIA RMBG (FP32 - 176MB)",
-        url: "https://models.stupidgeek.org/models/rmbg.onnx",
-        inputSize: 1024,
-        inputName: "input",
-        outputName: "output",
-        mean: [0.5, 0.5, 0.5],
-        std: [1.0, 1.0, 1.0],
-        outputType: "u2net",
-        executionProviders: ["webgpu", "wasm"],
-    },
+    // {
+    //     name: "BRIA RMBG (FP32 - 176MB)",
+    //     url: "https://models.stupidgeek.org/models/rmbg.onnx",
+    //     inputSize: 1024,
+    //     inputName: "input",
+    //     outputName: "output",
+    //     mean: [0.5, 0.5, 0.5],
+    //     std: [1.0, 1.0, 1.0],
+    //     outputType: "u2net",
+    //     executionProviders: ["webgpu", "wasm"],
+    // },
     {
         name: "Silueta (43MB)",
         url: "https://models.stupidgeek.org/models/silueta.onnx",
