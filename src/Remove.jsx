@@ -7,12 +7,20 @@ const MODEL_SIZE = 320;
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
-function Remove() {
-  const U2NETP_URL = "https://models.stupidgeek.org/models/u2netp.onnx"
-  const SILUETA_URL = "https://models.stupidgeek.org/models/silueta.onnx"
+const MODELS = [
+  {
+    name: "U²-NetP (4MB)",
+    url: "https://models.stupidgeek.org/models/u2netp.onnx",
+  },
+  {
+    name: "Silueta (43MB)",
+    url: "https://models.stupidgeek.org/models/silueta.onnx",
+  },
+];
 
+function Remove() {
   const [fileName, setFileName] = useState(null);
-  const [model, setModel] = useState(U2NETP_URL);
+  const [model, setModel] = useState(MODELS[0]);
   const [session, setSession] = useState(null);
   const [currentImage, setCurrentImage] = useState(null);
 
@@ -28,39 +36,19 @@ function Remove() {
   const inputCanvasRef = useRef(null);
   const outputCanvasRef = useRef(null);
 
-  // async function loadModel(model) {
-  //   try {
-  //     ort.env.wasm.wasmPaths =
-  //       "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
-
-  //     const loadedSession = await ort.InferenceSession.create(
-  //       model,
-  //       {
-  //         executionProviders: ["wasm"],
-  //         graphOptimizationLevel: "all",
-  //       }
-  //     );
-  //     return loadedSession;
-  //   } catch (err) {
-  //     console.error(err);
-  //     setStatus(`Failed to load model: ${err.message}`);
-  //   }
-  // }
-
-
-  async function loadModel(model) {
+  async function loadModel(modelUrl) {
     try {
       setStatus("Loading model...");
       setStatusMode("loading");
 
-      let modelData = await getCachedModel(model);
+      let modelData = await getCachedModel(modelUrl);
 
       if (modelData) {
         console.log("Loading model from IndexedDB");
       } else {
         console.log("Downloading model...");
 
-        const response = await fetch(model);
+        const response = await fetch(modelUrl);
 
         if (!response.ok) {
           throw new Error(
@@ -70,7 +58,7 @@ function Remove() {
 
         modelData = await response.arrayBuffer();
 
-        await cacheModel(model, modelData);
+        await cacheModel(modelUrl, modelData);
 
         console.log("Model saved to IndexedDB");
       }
@@ -87,7 +75,6 @@ function Remove() {
       );
 
       return loadedSession;
-
     } catch (err) {
       console.error(err);
       setStatus(`Failed to load model: ${err.message}`);
@@ -99,15 +86,15 @@ function Remove() {
 
   // Load ONNX model
   useEffect(() => {
-    // setStatus(`Loading Model ${model}`)
-    // setStatusMode("busy");
-    // console.log(model)
     async function load() {
-      const loadedSession = await loadModel(model);
+      const loadedSession = await loadModel(model.url);
 
       setSession(loadedSession);
-      setStatus(`Model loaded (${model})`);
-      setStatusMode("ok");
+
+      if (loadedSession) {
+        setStatus(`Model loaded (${model.name})`);
+        setStatusMode("ok");
+      }
     }
 
     load();
@@ -132,6 +119,12 @@ function Remove() {
       canvas.height = img.naturalHeight;
 
       ctx.drawImage(img, 0, 0);
+
+      // Clear previous output
+      const outputCanvas = outputCanvasRef.current;
+      outputCanvas.width = 1;
+      outputCanvas.height = 1;
+      outputCanvas.getContext("2d").clearRect(0, 0, 1, 1);
 
       setStatus('Ready — click "Remove background"');
       setStatusMode("ok");
@@ -160,6 +153,38 @@ function Remove() {
     setIsDragging(false);
   }
 
+  function clearImage() {
+    setCurrentImage(null);
+    setFileName(null);
+    setHasImage(false);
+    setHasOutput(false);
+
+    const inputCanvas = inputCanvasRef.current;
+    const outputCanvas = outputCanvasRef.current;
+
+    if (inputCanvas) {
+      const ctx = inputCanvas.getContext("2d");
+      ctx.clearRect(0, 0, inputCanvas.width, inputCanvas.height);
+      inputCanvas.width = 1;
+      inputCanvas.height = 1;
+    }
+
+    if (outputCanvas) {
+      const ctx = outputCanvas.getContext("2d");
+      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+      outputCanvas.width = 1;
+      outputCanvas.height = 1;
+    }
+
+    // Allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    setStatus(`Model loaded (${model.name})`);
+    setStatusMode("ok");
+  }
+
   function preprocess(img) {
     const canvas = document.createElement("canvas");
 
@@ -170,9 +195,16 @@ function Remove() {
 
     ctx.drawImage(img, 0, 0, MODEL_SIZE, MODEL_SIZE);
 
-    const { data } = ctx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE);
+    const { data } = ctx.getImageData(
+      0,
+      0,
+      MODEL_SIZE,
+      MODEL_SIZE
+    );
 
-    const chw = new Float32Array(3 * MODEL_SIZE * MODEL_SIZE);
+    const chw = new Float32Array(
+      3 * MODEL_SIZE * MODEL_SIZE
+    );
 
     const plane = MODEL_SIZE * MODEL_SIZE;
 
@@ -186,7 +218,11 @@ function Remove() {
       chw[2 * plane + p] = (b - MEAN[2]) / STD[2];
     }
 
-    return new ort.Tensor("float32", chw, [1, 3, MODEL_SIZE, MODEL_SIZE]);
+    return new ort.Tensor(
+      "float32",
+      chw,
+      [1, 3, MODEL_SIZE, MODEL_SIZE]
+    );
   }
 
   function maskToCanvas(output, outW, outH) {
@@ -207,10 +243,15 @@ function Remove() {
 
     const smallCtx = small.getContext("2d");
 
-    const imgData = smallCtx.createImageData(MODEL_SIZE, MODEL_SIZE);
+    const imgData = smallCtx.createImageData(
+      MODEL_SIZE,
+      MODEL_SIZE
+    );
 
     for (let i = 0; i < output.length; i++) {
-      const value = Math.round(((output[i] - min) / range) * 255);
+      const value = Math.round(
+        ((output[i] - min) / range) * 255
+      );
 
       imgData.data[i * 4] = 255;
       imgData.data[i * 4 + 1] = 255;
@@ -230,7 +271,13 @@ function Remove() {
     fullCtx.imageSmoothingEnabled = true;
     fullCtx.imageSmoothingQuality = "high";
 
-    fullCtx.drawImage(small, 0, 0, outW, outH);
+    fullCtx.drawImage(
+      small,
+      0,
+      0,
+      outW,
+      outH
+    );
 
     return full;
   }
@@ -262,7 +309,11 @@ function Remove() {
       const width = currentImage.naturalWidth;
       const height = currentImage.naturalHeight;
 
-      const maskCanvas = maskToCanvas(maskData, width, height);
+      const maskCanvas = maskToCanvas(
+        maskData,
+        width,
+        height
+      );
 
       const outputCanvas = outputCanvasRef.current;
 
@@ -274,7 +325,13 @@ function Remove() {
       ctx.clearRect(0, 0, width, height);
 
       // Draw original image
-      ctx.drawImage(currentImage, 0, 0, width, height);
+      ctx.drawImage(
+        currentImage,
+        0,
+        0,
+        width,
+        height
+      );
 
       // Use mask as alpha channel
       ctx.globalCompositeOperation = "destination-in";
@@ -283,7 +340,10 @@ function Remove() {
 
       setHasOutput(true);
 
-      const seconds = ((performance.now() - start) / 1000).toFixed(2);
+      const seconds = (
+        (performance.now() - start) /
+        1000
+      ).toFixed(2);
 
       setStatus(`Done in ${seconds}s`);
       setStatusMode("ok");
@@ -328,22 +388,35 @@ function Remove() {
         </h1>
 
         <span className="font-mono text-xs text-mute border border-line rounded-md px-2 py-[3px] bg-panel">
-          {model} · runs entirely on-device
+          {model.name} · runs entirely on-device
         </span>
       </header>
 
       <div className="flex items-center gap-2.5 text-[13px] text-mute mb-5 min-h-[20px]">
-        <span className={`w-[7px] h-[7px] rounded-full flex-shrink-0 ${dotColor}`} />
+        <span
+          className={`w-[7px] h-[7px] rounded-full flex-shrink-0 ${dotColor}`}
+        />
         <span>{status}</span>
       </div>
+
       <div className="flex items-center gap-2.5 text-[13px] text-mute mb-5 min-h-[20px]">
         <h1>Model:</h1>
+
         <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
+          value={model.url}
+          onChange={(e) => {
+            const selectedModel = MODELS.find(
+              (item) => item.url === e.target.value
+            );
+
+            setModel(selectedModel);
+          }}
         >
-          <option value={U2NETP_URL}>U²-NetP (4MB)</option>
-          <option value={SILUETA_URL}>Silueta (43MB)</option>
+          {MODELS.map((item) => (
+            <option key={item.url} value={item.url}>
+              {item.name}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -356,8 +429,9 @@ function Remove() {
 
           {!hasImage && (
             <label
-              className={`w-full h-full flex flex-col items-center justify-center gap-2.5 cursor-pointer text-center p-6 ${isDragging ? "bg-[#eafaf1]" : ""
-                }`}
+              className={`w-full h-full flex flex-col items-center justify-center gap-2.5 cursor-pointer text-center p-6 ${
+                isDragging ? "bg-[#eafaf1]" : ""
+              }`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -396,7 +470,9 @@ function Remove() {
           <canvas
             ref={inputCanvasRef}
             className="max-w-full max-h-full block"
-            style={{ display: hasImage ? "block" : "none" }}
+            style={{
+              display: hasImage ? "block" : "none",
+            }}
           />
         </div>
 
@@ -409,7 +485,9 @@ function Remove() {
           <canvas
             ref={outputCanvasRef}
             className="max-w-full max-h-full block"
-            style={{ display: hasOutput ? "block" : "none" }}
+            style={{
+              display: hasOutput ? "block" : "none",
+            }}
           />
         </div>
       </div>
@@ -420,7 +498,9 @@ function Remove() {
           disabled={!session || !currentImage || processing}
           onClick={removeBackground}
         >
-          {processing ? "Removing background…" : "Remove background"}
+          {processing
+            ? "Removing background…"
+            : "Remove background"}
         </button>
 
         <button
@@ -430,12 +510,26 @@ function Remove() {
         >
           Download PNG
         </button>
+
+        <button
+          className="font-sans text-[13.5px] font-semibold rounded-[7px] border border-line px-[18px] py-[11px] cursor-pointer transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-panel text-ink enabled:hover:bg-[#ebeee9]"
+          disabled={!hasImage}
+          onClick={clearImage}
+        >
+          Clear image
+        </button>
       </div>
 
       <div className="mt-10 pt-5 border-t border-line text-[12.5px] text-mute leading-relaxed">
-        Model: <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">{model}</code> (fetched once and cached by the browser). Inference runs via{" "}
-        <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">onnxruntime-web</code> on
-        WebAssembly — your image never leaves this device.
+        Model:{" "}
+        <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">
+          {model.name}
+        </code>{" "}
+        (fetched once and cached by the browser). Inference runs via{" "}
+        <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">
+          onnxruntime-web
+        </code>{" "}
+        on WebAssembly — your image never leaves this device.
       </div>
     </div>
   );
