@@ -578,38 +578,44 @@ function Remove() {
                 <Header
                     model={model}
                     downloadProgress={downloadProgress}
+                    status={status}
+                    dotColor={dotColor}
                 />
 
                 {/* STATUS */}
-                <div className="mb-1 flex min-h-[20px] items-center gap-2.5 text-xs text-black/50 sm:text-[13px]">
+                {/* <div className="mb-1 flex min-h-[20px] items-center gap-2.5 text-xs text-black/50 sm:text-[13px]">
                     <span
                         className={`h-2 w-2 flex-shrink-0 rounded-full ${dotColor}`}
                     />
 
                     <span>{status}</span>
-                </div>
+                </div> */}
 
                 {/* CONTROLS */}
+                {/* Model selector + desktop controls */}
                 <section className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
-
                     <ModelSelector
                         model={model}
                         setModel={setModel}
                         processing={processing}
                         MODELS={MODELS}
                     />
-                    <Controls
-                        session={session}
-                        currentImage={currentImage}
-                        processing={processing}
-                        removeBackground={removeBackground}
-                        hasOutput={hasOutput}
-                        downloadImage={downloadImage}
-                        hasImage={hasImage}
-                        clearImage={clearImage}
-                    />
+
+                    <div className="hidden md:block">
+                        <Controls
+                            session={session}
+                            currentImage={currentImage}
+                            processing={processing}
+                            removeBackground={removeBackground}
+                            hasOutput={hasOutput}
+                            downloadImage={downloadImage}
+                            hasImage={hasImage}
+                            clearImage={clearImage}
+                        />
+                    </div>
                 </section>
 
+                {/* Full-width workspace */}
                 <Workspace
                     isDragging={isDragging}
                     handleDragOver={handleDragOver}
@@ -623,7 +629,21 @@ function Remove() {
                     outputCanvasRef={outputCanvasRef}
                 />
 
-                <footer className="mt-8 border-t border-black/10 pt-5 text-xs leading-relaxed text-black/40">
+                {/* Mobile controls */}
+                <div className="mt-3 md:hidden">
+                    <Controls
+                        session={session}
+                        currentImage={currentImage}
+                        processing={processing}
+                        removeBackground={removeBackground}
+                        hasOutput={hasOutput}
+                        downloadImage={downloadImage}
+                        hasImage={hasImage}
+                        clearImage={clearImage}
+                    />
+                </div>
+
+                <footer className="my-8 py-5 border-t border-black/10 pt-5 text-xs leading-relaxed text-black/40">
 
                     <p>
                         <span className="font-semibold text-black/55">

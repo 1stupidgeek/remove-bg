@@ -82,7 +82,6 @@ function KanyeWest() {
                                     </p>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </div>

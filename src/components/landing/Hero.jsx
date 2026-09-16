@@ -8,7 +8,7 @@ function Hero() {
 
                 <header className="">
                     <div className="max-w-4xl">
-                        <div className="mb-5 inline-flex items-center border border-black/10 bg-white px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-xs">
+                        <div className="mb-2 inline-flex items-center border border-black/10 bg-white px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-xs">
                             Free and Secure Background Removing Tool
                         </div>
 
@@ -23,12 +23,8 @@ function Hero() {
                         <p className="border-b w-fit mt-4 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-[11px]">
                             Your images never leave your device
                         </p>
-                        <p className="mt-3 max-w-2xl text-[15px] leading-[1.7] text-black/60 sm:text-base">
-                            Cut out the background from your images using AI
-                            that runs <span className="inline-flex items-center border border-black/10 bg-whit px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-xs">directly in your browser</span>
-                        </p>
 
-                        <div className="mt-4 w-full">
+                        <div className="mt-4 w-full my-3">
                             <div className="flex w-full flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
                                 {/* LEFT — MAIN CTA */}
                                 <div>
@@ -38,14 +34,8 @@ function Hero() {
                                     >
                                         Remove a background →
                                     </Link>
-
-                                    <p className="mt-4 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-[11px]">
-                                        No accounts · No uploads · No breach of privacy
-                                    </p>
                                 </div>
 
-                                {/* RIGHT — SUPPORT */}
-                                <KofiTipJar />
                             </div>
                         </div>
                     </div>

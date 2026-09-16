@@ -1,9 +1,23 @@
+import KofiTipJar from "./KofiTipJar";
+
 function Features() {
     return (
-        <section className="mx-auto max-w-7xl px-6 py-32">
+        <section className="mx-auto max-w-7xl px-6 py-5">
+            <div className="border-b mb-8 border-black/50">
+                <p className="my-4 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-[11px]">
+                    No accounts · No servers · No breach of privacy
+                </p>
+                {/* <p className="my-5 max-w-2xl text-[15px] leading-[1.7] text-black/60 sm:text-base">
+                    Cut out the background from your images using AI
+                    that runs <span className="inline-flex items-center border border-black/10 bg-whit px-1 font-mono text-[10px] font-bold uppercase tracking-wider text-black/40 sm:text-xs">directly in your browser</span>
+                </p> */}
+
+                {/* RIGHT — SUPPORT */}
+                <KofiTipJar />
+            </div>
             <div className="max-w-2xl">
                 <p className="text-xs font-bold uppercase tracking-widest text-black/40">
-                    WHY USE 'REMOVE THAT BG'?
+                    WHY USE 'Nuke my BG'?
                 </p>
 
                 <h2 className="mt-4 text-5xl font-black tracking-tighter sm:text-6xl">

@@ -11,7 +11,7 @@ function Workspace({
     outputCanvasRef,
 }) {
     return (
-        <section className="bg-[#3b68ff] p-2 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] sm:p-3 md:p-4">
+        <section className="bg-[#3b68ff] p-1 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)] sm:p-2 md:p-3">
             <div className="bg-white p-1.5 sm:p-2">
                 <div className="grid grid-cols-1 border border-black/10 sm:grid-cols-2">
 
