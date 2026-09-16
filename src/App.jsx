@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import * as ort from "onnxruntime-web";
 import "./App.css";
-import About from "./components/About";
 
 const MODEL_SIZE = 320;
 
