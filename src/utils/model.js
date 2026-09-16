@@ -3,7 +3,7 @@ const STD = [0.229, 0.224, 0.225];
 
 export const MODELS = [
     {
-        name: "U²-NetP (4MB)",
+        name: "U²-NetP (4MB) /basic",
         url: "https://models.stupidgeek.org/models/u2netp.onnx",
         inputSize: 320,
         inputName: "input.1",
@@ -13,7 +13,7 @@ export const MODELS = [
         executionProviders: ["wasm"], // MaxPool ceil_mode is unsupported in WebGPU
     },
     {
-        name: "RMBG-1.4 (FP16 - 88MB)",
+        name: "RMBG-1.4 (88MB) /general /best-quality",
         url: "https://models.stupidgeek.org/models/rmbg_fp16.onnx",
         inputSize: 1024,
         inputName: "input",
@@ -24,7 +24,7 @@ export const MODELS = [
         executionProviders: ["webgpu", "wasm"], // Best on GPU, falls back to WASM
     },
     {
-        name: "Silueta (43MB)",
+        name: "Silueta (43MB) /general",
         url: "https://models.stupidgeek.org/models/silueta.onnx",
         inputSize: 320,
         inputName: "input.1",
@@ -34,7 +34,7 @@ export const MODELS = [
         executionProviders: ["wasm"], // U2-Net variant (requires WASM)
     },
     {
-        name: "U²-Net (176MB)",
+        name: "U²-Net (176MB) /general",
         url: "https://models.stupidgeek.org/models/u2net.onnx",
         inputSize: 320,
         inputName: "input.1",
@@ -44,7 +44,7 @@ export const MODELS = [
         executionProviders: ["wasm"], // Fails on WebGPU MaxPool kernel
     },
     {
-        name: "MODNet — Portrait",
+        name: "MODNet (25MB) /portraits",
         url: "https://models.stupidgeek.org/models/modnet_photographic_portrait_matting.onnx",
         inputSize: 512,
         inputName: "input",
