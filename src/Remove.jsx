@@ -1,88 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { getCachedModel, cacheModel } from "./utils/modelCache";
+import Controls from "./components/landing/tool/Controls";
+import Workspace from "./components/landing/tool/Images";
+import ModelSelector from "./components/landing/tool/Models";
+import Header from "./components/landing/tool/Header";
+import { MODELS } from "./utils/model";
 
-const MEAN = [0.485, 0.456, 0.406];
-const STD = [0.229, 0.224, 0.225];
-
-const MODELS = [
-    {
-        name: "U²-NetP (4MB)",
-        url: "https://models.stupidgeek.org/models/u2netp.onnx",
-        inputSize: 320,
-        inputName: "input.1",
-        mean: MEAN,
-        std: STD,
-        outputType: "u2net",
-        executionProviders: ["wasm"], // MaxPool ceil_mode is unsupported in WebGPU
-    },
-    // {
-    //     name: "BRIA RMBG (INT8 Quantized - 44MB)",
-    //     url: "https://models.stupidgeek.org/models/rmbg_quantized.onnx",
-    //     inputSize: 1024,
-    //     inputName: "input",
-    //     outputName: "output",
-    //     mean: [0.5, 0.5, 0.5],
-    //     std: [1.0, 1.0, 1.0],
-    //     outputType: "u2net",
-    //     executionProviders: ["webgpu"], // INT8 ops run best on CPU/WASM
-    // },
-    {
-        name: "BRIA RMBG (FP16 - 88MB)",
-        url: "https://models.stupidgeek.org/models/rmbg_fp16.onnx",
-        inputSize: 1024,
-        inputName: "input",
-        outputName: "output",
-        mean: [0.5, 0.5, 0.5],
-        std: [1.0, 1.0, 1.0],
-        outputType: "u2net",
-        executionProviders: ["webgpu", "wasm"], // Best on GPU, falls back to WASM
-    },
-    // {
-    //     name: "BRIA RMBG (FP32 - 176MB)",
-    //     url: "https://models.stupidgeek.org/models/rmbg.onnx",
-    //     inputSize: 1024,
-    //     inputName: "input",
-    //     outputName: "output",
-    //     mean: [0.5, 0.5, 0.5],
-    //     std: [1.0, 1.0, 1.0],
-    //     outputType: "u2net",
-    //     executionProviders: ["webgpu", "wasm"],
-    // },
-    {
-        name: "Silueta (43MB)",
-        url: "https://models.stupidgeek.org/models/silueta.onnx",
-        inputSize: 320,
-        inputName: "input.1",
-        mean: MEAN,
-        std: STD,
-        outputType: "u2net",
-        executionProviders: ["wasm"], // U2-Net variant (requires WASM)
-    },
-    {
-        name: "U²-Net (176MB)",
-        url: "https://models.stupidgeek.org/models/u2net.onnx",
-        inputSize: 320,
-        inputName: "input.1",
-        mean: MEAN,
-        std: STD,
-        outputType: "u2net",
-        executionProviders: ["wasm"], // Fails on WebGPU MaxPool kernel
-    },
-    // {
-    //     name: "BiRefNet General Lite (224MB)",
-    //     url: "https://models.stupidgeek.org/models/BiRefNet-general-bb_swin_v1_tiny-epoch_232.onnx",
-
-    //     inputSize: 1024,
-    //     inputName: "input_image",
-    //     outputName: "output_image",
-
-    //     mean: MEAN,
-    //     std: STD,
-
-    //     outputType: "birefnet",
-    // },
-];
 
 function Remove() {
     const [fileName, setFileName] = useState(null);
@@ -90,6 +14,7 @@ function Remove() {
     const [session, setSession] = useState(null);
     const [currentImage, setCurrentImage] = useState(null);
 
+    const [downloadProgress, setDownloadProgress] = useState(null);
     const [status, setStatus] = useState("Loading model…");
     const [statusMode, setStatusMode] = useState("");
 
@@ -103,11 +28,12 @@ function Remove() {
     const outputCanvasRef = useRef(null);
 
     async function loadModel(modelUrl) {
-        const config = MODELS.find((m) => m.url == modelUrl);
+        const config = MODELS.find((m) => m.url === modelUrl);
 
         try {
             setStatus("Loading model...");
             setStatusMode("loading");
+            setDownloadProgress(null);
 
             let modelData = await getCachedModel(modelUrl);
 
@@ -124,7 +50,49 @@ function Remove() {
                     );
                 }
 
-                modelData = await response.arrayBuffer();
+                const contentLength = response.headers.get("content-length");
+
+                if (!response.body || !contentLength) {
+                    // Fallback if the server doesn't provide Content-Length
+                    modelData = await response.arrayBuffer();
+                } else {
+                    const total = parseInt(contentLength, 10);
+                    const reader = response.body.getReader();
+
+                    const chunks = [];
+                    let received = 0;
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+
+                        if (done) {
+                            break;
+                        }
+
+                        chunks.push(value);
+                        received += value.length;
+
+                        const progress = Math.round(
+                            (received / total) * 100
+                        );
+
+                        setDownloadProgress(progress);
+                        setStatus(`Downloading model… ${progress}%`);
+                    }
+
+                    const buffer = new Uint8Array(received);
+
+                    let offset = 0;
+
+                    for (const chunk of chunks) {
+                        buffer.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+
+                    modelData = buffer.buffer;
+                }
+
+                setDownloadProgress(null);
 
                 await cacheModel(modelUrl, modelData);
 
@@ -134,32 +102,19 @@ function Remove() {
             ort.env.wasm.wasmPaths =
                 "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
 
-            // const loadedSession = await ort.InferenceSession.create(
-            //     modelData,
-            //     {
-            //         executionProviders: ["wasm"],
-            //         graphOptimizationLevel: "all",
-            //     }
-            // );
             const loadedSession = await ort.InferenceSession.create(
                 modelData,
                 {
-                    // prioritize WebGPU, fallback to WebGL, then WASM
-                    // executionProviders: ["webgpu","webgl", "wasm"],
                     executionProviders: config.executionProviders,
                     graphOptimizationLevel: "all",
                 }
             );
 
-
-            // console.log("Inputs:", loadedSession.inputNames);
-            // console.log("Outputs:", loadedSession.outputNames);
-            // console.log("Input metadata:", loadedSession.inputMetadata);
-            // console.log("Output metadata:", loadedSession.outputMetadata);
-
             return loadedSession;
         } catch (err) {
             console.error(err);
+
+            setDownloadProgress(null);
 
             setStatus(`Failed to load model: ${err.message}`);
             setStatusMode("error");
@@ -168,22 +123,16 @@ function Remove() {
         }
     }
 
-    // Load selected ONNX model
     useEffect(() => {
         let cancelled = false;
 
         async function load() {
-            // Don't allow inference with the previous model
             setSession(null);
             setHasOutput(false);
 
             const loadedSession = await loadModel(model.url);
 
-            if (cancelled) {
-                return;
-            }
-
-            if (!loadedSession) {
+            if (cancelled || !loadedSession) {
                 return;
             }
 
@@ -237,7 +186,6 @@ function Remove() {
                 img.naturalHeight
             );
 
-            // Clear previous output
             const outputCanvas = outputCanvasRef.current;
 
             outputCanvas.width = 1;
@@ -318,7 +266,6 @@ function Remove() {
             outputCanvas.height = 1;
         }
 
-        // Allow selecting the same file again
         if (fileInputRef.current) {
             fileInputRef.current.value = "";
         }
@@ -404,11 +351,6 @@ function Remove() {
             config.inputSize
         );
 
-        /*
-         * BiRefNet outputs logits.
-         *
-         * Convert logits -> probability using sigmoid.
-         */
         if (config.outputType === "birefnet") {
             for (let i = 0; i < output.length; i++) {
                 const probability =
@@ -423,13 +365,7 @@ function Remove() {
                 imgData.data[i * 4 + 2] = 255;
                 imgData.data[i * 4 + 3] = alpha;
             }
-        }
-
-        /*
-         * U²-Net / Silueta output is treated
-         * as a saliency map.
-         */
-        else if (config.outputType === "u2net") {
+        } else if (config.outputType === "u2net") {
             let min = Infinity;
             let max = -Infinity;
 
@@ -463,10 +399,6 @@ function Remove() {
             0
         );
 
-        /*
-         * Resize the model's mask back to
-         * the original image dimensions.
-         */
         const full = document.createElement("canvas");
 
         full.width = outW;
@@ -499,7 +431,6 @@ function Remove() {
         setStatus("Running inference…");
         setStatusMode("busy");
 
-        // Give browser a chance to render the status
         await new Promise((resolve) =>
             setTimeout(resolve, 20)
         );
@@ -507,31 +438,15 @@ function Remove() {
         const start = performance.now();
 
         try {
-            /*
-             * Image
-             * ↓
-             * Model-specific preprocessing
-             * ↓
-             * Tensor
-             */
             const tensor = preprocess(
-                currentImage
+                currentImage,
+                config.inputSize
             );
 
-            /*
-             * Use the input name defined
-             * by the selected model.
-             */
             const outputs = await session.run({
                 [config.inputName]: tensor,
             });
 
-            /*
-             * Use the configured output name
-             * when provided.
-             *
-             * Otherwise use the model's first output.
-             */
             const outputName =
                 config.outputName ||
                 session.outputNames[0];
@@ -546,22 +461,12 @@ function Remove() {
 
             const maskData = output.data;
 
-            console.log(
-                "Output:",
-                outputName,
-                output.dims
-            );
-
             const width =
                 currentImage.naturalWidth;
 
             const height =
                 currentImage.naturalHeight;
 
-            /*
-             * Convert model output into
-             * an alpha mask.
-             */
             const maskCanvas = maskToCanvas(
                 maskData,
                 width,
@@ -584,9 +489,6 @@ function Remove() {
                 height
             );
 
-            /*
-             * Draw original image.
-             */
             ctx.drawImage(
                 currentImage,
                 0,
@@ -595,9 +497,6 @@ function Remove() {
                 height
             );
 
-            /*
-             * Apply mask as alpha.
-             */
             ctx.globalCompositeOperation =
                 "destination-in";
 
@@ -609,9 +508,6 @@ function Remove() {
                 height
             );
 
-            /*
-             * Restore normal drawing mode.
-             */
             ctx.globalCompositeOperation =
                 "source-over";
 
@@ -622,10 +518,7 @@ function Remove() {
                 1000
             ).toFixed(2);
 
-            setStatus(
-                `Done in ${seconds}s`
-            );
-
+            setStatus(`Done in ${seconds}s`);
             setStatusMode("ok");
         } catch (err) {
             console.error(err);
@@ -671,213 +564,84 @@ function Remove() {
 
     const dotColor =
         statusMode === "ok"
-            ? "bg-key"
+            ? "bg-[#00FF00]"
             : statusMode === "busy"
                 ? "bg-amber-500 animate-pulse"
-                : "bg-line";
+                : "bg-black/25";
 
     return (
-        <div className="max-w-[960px] mx-auto px-6 pt-12 pb-20">
-            <header className="flex items-baseline justify-between gap-4 mb-9 flex-wrap">
-                <h1 className="text-[22px] font-[650] tracking-tight m-0">
-                    Cut<span className="text-key-ink">out</span>
-                </h1>
+        <main className="bg-white px-4 sm:px-6 md:px-8">
 
-                <span className="font-mono text-xs text-mute border border-line rounded-md px-2 py-[3px] bg-panel">
-                    {model.name} · runs entirely on-device
-                </span>
-            </header>
+            <div className="mx-auto w-full max-w-[1100px]">
 
-            <div className="flex items-center gap-2.5 text-[13px] text-mute mb-5 min-h-[20px]">
-                <span
-                    className={`w-[7px] h-[7px] rounded-full flex-shrink-0 ${dotColor}`}
+                {/* HEADER */}
+                <Header
+                    model={model}
+                    downloadProgress={downloadProgress}
                 />
 
-                <span>
-                    {status}
-                </span>
-            </div>
-            <div className="flex items-center gap-2.5 text-[13px] text-mute mb-5 min-h-[20px]">
-                <label htmlFor="model-select" className="font-semibold text-ink">
-                    Model:
-                </label>
 
-                <select
-                    id="model-select"
-                    value={model.url}
-                    disabled={processing}
-                    className="bg-panel border border-line rounded px-2 py-1 text-[13px] max-w-[300px] w-full text-ink focus:outline-none focus:border-key"
-                    onChange={(e) => {
-                        const selectedModel = MODELS.find(
-                            (item) => item.url === e.target.value
-                        );
-
-                        if (selectedModel) {
-                            setModel(selectedModel);
-                        }
-                    }}
-                >
-                    <optgroup label="GPU Models (WebGPU)">
-                        {MODELS.filter((item) => item.executionProviders[0] === "webgpu").map(
-                            (item) => (
-                                <option key={item.url} value={item.url}>
-                                    {item.name}
-                                </option>
-                            )
-                        )}
-                    </optgroup>
-
-                    <optgroup label="CPU Models (WebAssembly)">
-                        {MODELS.filter((item) => item.executionProviders[0] === "wasm").map(
-                            (item) => (
-                                <option key={item.url} value={item.url}>
-                                    {item.name}
-                                </option>
-                            )
-                        )}
-                    </optgroup>
-                </select>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* INPUT */}
-                <div className="relative overflow-hidden flex items-center justify-center bg-panel border border-line rounded-[10px] aspect-[4/3]">
-                    <span className="absolute top-2.5 left-3 z-[2] font-mono text-[11px] text-mute">
-                        input
-                    </span>
-
-                    {!hasImage && (
-                        <label
-                            className={`w-full h-full flex flex-col items-center justify-center gap-2.5 cursor-pointer text-center p-6 ${isDragging
-                                ? "bg-[#eafaf1]"
-                                : ""
-                                }`}
-                            onDragOver={
-                                handleDragOver
-                            }
-                            onDragLeave={
-                                handleDragLeave
-                            }
-                            onDrop={handleDrop}
-                        >
-                            <svg
-                                width="34"
-                                height="34"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                className="opacity-[0.35]"
-                            >
-                                <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
-                                <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-                            </svg>
-
-                            <p className="m-0 text-[13.5px] text-mute">
-                                Drop an image, or click to choose one
-                            </p>
-
-                            <small className="font-mono text-[11px] text-mute">
-                                runs locally — nothing is uploaded
-                            </small>
-
-                            <input
-                                ref={
-                                    fileInputRef
-                                }
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={
-                                    handleFileChange
-                                }
-                            />
-                        </label>
-                    )}
-
-                    <canvas
-                        ref={
-                            inputCanvasRef
-                        }
-                        className="max-w-full max-h-full block"
-                        style={{
-                            display: hasImage
-                                ? "block"
-                                : "none",
-                        }}
+                {/* STATUS */}
+                <div className="mb-1 flex min-h-[20px] items-center gap-2.5 text-xs text-black/50 sm:text-[13px]">
+                    <span
+                        className={`h-2 w-2 flex-shrink-0 rounded-full ${dotColor}`}
                     />
+
+                    <span>{status}</span>
                 </div>
 
-                {/* OUTPUT */}
-                <div className="relative overflow-hidden flex items-center justify-center bg-panel border border-line rounded-[10px] aspect-[4/3] bg-checker">
-                    <span className="absolute top-2.5 left-3 z-[2] font-mono text-[11px] text-mute">
-                        output
-                    </span>
+                {/* CONTROLS */}
+                <section className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
 
-                    <canvas
-                        ref={
-                            outputCanvasRef
-                        }
-                        className="max-w-full max-h-full block"
-                        style={{
-                            display: hasOutput
-                                ? "block"
-                                : "none",
-                        }}
+                    <ModelSelector
+                        model={model}
+                        setModel={setModel}
+                        processing={processing}
+                        MODELS={MODELS}
                     />
-                </div>
+                    <Controls
+                        session={session}
+                        currentImage={currentImage}
+                        processing={processing}
+                        removeBackground={removeBackground}
+                        hasOutput={hasOutput}
+                        downloadImage={downloadImage}
+                        hasImage={hasImage}
+                        clearImage={clearImage}
+                    />
+                </section>
+
+                <Workspace
+                    isDragging={isDragging}
+                    handleDragOver={handleDragOver}
+                    handleDragLeave={handleDragLeave}
+                    handleDrop={handleDrop}
+                    hasImage={hasImage}
+                    fileInputRef={fileInputRef}
+                    handleFileChange={handleFileChange}
+                    inputCanvasRef={inputCanvasRef}
+                    hasOutput={hasOutput}
+                    outputCanvasRef={outputCanvasRef}
+                />
+
+                <footer className="mt-8 border-t border-black/10 pt-5 text-xs leading-relaxed text-black/40">
+
+                    <p>
+                        <span className="font-semibold text-black/55">
+                            {model.name}
+                        </span>{" "}
+                        is fetched once and cached by your browser.
+                        Inference runs locally through{" "}
+                        <code className="border border-black/10 bg-[#f7f7f7] px-1.5 py-0.5 font-mono text-black/55">
+                            onnxruntime-web
+                        </code>
+                        . Your image never leaves this device.
+                    </p>
+
+                </footer>
+
             </div>
-
-            <div className="flex gap-2.5 mt-5 flex-wrap">
-                <button
-                    className="font-sans text-[13.5px] font-semibold rounded-[7px] border border-transparent px-[18px] py-[11px] cursor-pointer transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-key text-[#06281a] enabled:hover:bg-[#1ea366]"
-                    disabled={
-                        !session ||
-                        !currentImage ||
-                        processing
-                    }
-                    onClick={
-                        removeBackground
-                    }
-                >
-                    {processing
-                        ? "Removing background…"
-                        : "Remove background"}
-                </button>
-
-                <button
-                    className="font-sans text-[13.5px] font-semibold rounded-[7px] border border-line px-[18px] py-[11px] cursor-pointer transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-panel text-ink enabled:hover:bg-[#ebeee9]"
-                    disabled={!hasOutput}
-                    onClick={
-                        downloadImage
-                    }
-                >
-                    Download PNG
-                </button>
-
-                <button
-                    className="font-sans text-[13.5px] font-semibold rounded-[7px] border border-line px-[18px] py-[11px] cursor-pointer transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-panel text-ink enabled:hover:bg-[#ebeee9]"
-                    disabled={!hasImage}
-                    onClick={clearImage}
-                >
-                    Clear image
-                </button>
-            </div>
-
-            <div className="mt-10 pt-5 border-t border-line text-[12.5px] text-mute leading-relaxed">
-                Model:{" "}
-                <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">
-                    {model.name}
-                </code>{" "}
-                (fetched once and cached by the browser).
-                Inference runs via{" "}
-                <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">
-                    onnxruntime-web
-                </code>{" "}
-                on WebAssembly — your image never leaves
-                this device.
-            </div>
-        </div>
+        </main>
     );
 }
 
