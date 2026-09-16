@@ -580,7 +580,6 @@ function Remove() {
                     downloadProgress={downloadProgress}
                 />
 
-
                 {/* STATUS */}
                 <div className="mb-1 flex min-h-[20px] items-center gap-2.5 text-xs text-black/50 sm:text-[13px]">
                     <span
