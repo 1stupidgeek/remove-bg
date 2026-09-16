@@ -7,6 +7,9 @@ const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
 function App() {
+  const SILUETA_URL = "https://models.stupidgeek.org/models/silueta.onnx"
+  const U2NETP_URL = "/models/u2netp.onnx"
+
   const [fileName, setFileName] = useState(null);
   const [model, setModel] = useState("/models/u2netp.onnx");
   const [session, setSession] = useState(null);
@@ -288,8 +291,8 @@ function App() {
           value={model}
           onChange={(e) => setModel(e.target.value)}
         >
-          <option value="/models/u2netp.onnx">U²-NetP (4MB)</option>
-          <option value="https:/models.stupidgeek.org/models/silueta.onnx">Silueta (43MB)</option>
+          <option value={U2NETP_URL}>U²-NetP (4MB)</option>
+          <option value={SILUETA_URL}>Silueta (43MB)</option>
         </select>
       </div>
 
