@@ -1,442 +1,190 @@
-import { useEffect, useRef, useState } from "react";
-import "./App.css";
-import { getCachedModel, cacheModel } from "./utils/modelCache";
-
-const MODEL_SIZE = 320;
-
-const MEAN = [0.485, 0.456, 0.406];
-const STD = [0.229, 0.224, 0.225];
+import { Link } from "react-router-dom";
 
 function App() {
-  const SILUETA_URL = "https://models.stupidgeek.org/models/silueta.onnx"
-  const U2NETP_URL = "https://models.stupidgeek.org/models/u2netp.onnx"
-
-  const [fileName, setFileName] = useState(null);
-  const [model, setModel] = useState(SILUETA_URL);
-  const [session, setSession] = useState(null);
-  const [currentImage, setCurrentImage] = useState(null);
-
-  const [status, setStatus] = useState("Loading model…");
-  const [statusMode, setStatusMode] = useState("");
-
-  const [processing, setProcessing] = useState(false);
-  const [hasImage, setHasImage] = useState(false);
-  const [hasOutput, setHasOutput] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-
-  const fileInputRef = useRef(null);
-  const inputCanvasRef = useRef(null);
-  const outputCanvasRef = useRef(null);
-
-  // async function loadModel(model) {
-  //   try {
-  //     ort.env.wasm.wasmPaths =
-  //       "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
-
-  //     const loadedSession = await ort.InferenceSession.create(
-  //       model,
-  //       {
-  //         executionProviders: ["wasm"],
-  //         graphOptimizationLevel: "all",
-  //       }
-  //     );
-  //     return loadedSession;
-  //   } catch (err) {
-  //     console.error(err);
-  //     setStatus(`Failed to load model: ${err.message}`);
-  //   }
-  // }
-
-
-  async function loadModel(model) {
-    try {
-      setStatus("Loading model...");
-      setStatusMode("loading");
-
-      let modelData = await getCachedModel(model);
-
-      if (modelData) {
-        console.log("Loading model from IndexedDB");
-      } else {
-        console.log("Downloading model...");
-
-        const response = await fetch(model);
-
-        if (!response.ok) {
-          throw new Error(
-            `Failed to download model: ${response.status}`
-          );
-        }
-
-        modelData = await response.arrayBuffer();
-
-        await cacheModel(model, modelData);
-
-        console.log("Model saved to IndexedDB");
-      }
-
-      ort.env.wasm.wasmPaths =
-        "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/";
-
-      const loadedSession = await ort.InferenceSession.create(
-        modelData,
-        {
-          executionProviders: ["wasm"],
-          graphOptimizationLevel: "all",
-        }
-      );
-
-      return loadedSession;
-
-    } catch (err) {
-      console.error(err);
-      setStatus(`Failed to load model: ${err.message}`);
-      setStatusMode("error");
-
-      return null;
-    }
-  }
-
-  // Load ONNX model
-  useEffect(() => {
-    // setStatus(`Loading Model ${model}`)
-    // setStatusMode("busy");
-    // console.log(model)
-    async function load() {
-      const loadedSession = await loadModel(model);
-
-      setSession(loadedSession);
-      setStatus(`Model loaded (${model})`);
-      setStatusMode("ok");
-    }
-
-    load();
-  }, [model]);
-
-  function loadFile(file) {
-    if (!file || !file.type.startsWith("image/")) {
-      return;
-    }
-
-    const img = new Image();
-
-    img.onload = () => {
-      setCurrentImage(img);
-      setHasImage(true);
-      setHasOutput(false);
-
-      const canvas = inputCanvasRef.current;
-      const ctx = canvas.getContext("2d");
-
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-
-      ctx.drawImage(img, 0, 0);
-
-      setStatus('Ready — click "Remove background"');
-      setStatusMode("ok");
-    };
-
-    img.src = URL.createObjectURL(file);
-    setFileName(file.name);
-  }
-
-  function handleFileChange(event) {
-    loadFile(event.target.files[0]);
-  }
-
-  function handleDrop(event) {
-    event.preventDefault();
-    setIsDragging(false);
-    loadFile(event.dataTransfer.files[0]);
-  }
-
-  function handleDragOver(event) {
-    event.preventDefault();
-    setIsDragging(true);
-  }
-
-  function handleDragLeave() {
-    setIsDragging(false);
-  }
-
-  function preprocess(img) {
-    const canvas = document.createElement("canvas");
-
-    canvas.width = MODEL_SIZE;
-    canvas.height = MODEL_SIZE;
-
-    const ctx = canvas.getContext("2d");
-
-    ctx.drawImage(img, 0, 0, MODEL_SIZE, MODEL_SIZE);
-
-    const { data } = ctx.getImageData(0, 0, MODEL_SIZE, MODEL_SIZE);
-
-    const chw = new Float32Array(3 * MODEL_SIZE * MODEL_SIZE);
-
-    const plane = MODEL_SIZE * MODEL_SIZE;
-
-    for (let p = 0; p < plane; p++) {
-      const r = data[p * 4] / 255;
-      const g = data[p * 4 + 1] / 255;
-      const b = data[p * 4 + 2] / 255;
-
-      chw[p] = (r - MEAN[0]) / STD[0];
-      chw[plane + p] = (g - MEAN[1]) / STD[1];
-      chw[2 * plane + p] = (b - MEAN[2]) / STD[2];
-    }
-
-    return new ort.Tensor("float32", chw, [1, 3, MODEL_SIZE, MODEL_SIZE]);
-  }
-
-  function maskToCanvas(output, outW, outH) {
-    let min = Infinity;
-    let max = -Infinity;
-
-    for (let i = 0; i < output.length; i++) {
-      if (output[i] < min) min = output[i];
-      if (output[i] > max) max = output[i];
-    }
-
-    const range = max - min || 1;
-
-    const small = document.createElement("canvas");
-
-    small.width = MODEL_SIZE;
-    small.height = MODEL_SIZE;
-
-    const smallCtx = small.getContext("2d");
-
-    const imgData = smallCtx.createImageData(MODEL_SIZE, MODEL_SIZE);
-
-    for (let i = 0; i < output.length; i++) {
-      const value = Math.round(((output[i] - min) / range) * 255);
-
-      imgData.data[i * 4] = 255;
-      imgData.data[i * 4 + 1] = 255;
-      imgData.data[i * 4 + 2] = 255;
-      imgData.data[i * 4 + 3] = value;
-    }
-
-    smallCtx.putImageData(imgData, 0, 0);
-
-    const full = document.createElement("canvas");
-
-    full.width = outW;
-    full.height = outH;
-
-    const fullCtx = full.getContext("2d");
-
-    fullCtx.imageSmoothingEnabled = true;
-    fullCtx.imageSmoothingQuality = "high";
-
-    fullCtx.drawImage(small, 0, 0, outW, outH);
-
-    return full;
-  }
-
-  async function removeBackground() {
-    if (!currentImage || !session) {
-      return;
-    }
-
-    setProcessing(true);
-    setStatus("Running inference…");
-    setStatusMode("busy");
-
-    // Give React/browser a chance to render the status
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    const start = performance.now();
-
-    try {
-      const tensor = preprocess(currentImage);
-
-      const outputs = await session.run({
-        "input.1": tensor,
-      });
-
-      const outputName = session.outputNames[0];
-      const maskData = outputs[outputName].data;
-
-      const width = currentImage.naturalWidth;
-      const height = currentImage.naturalHeight;
-
-      const maskCanvas = maskToCanvas(maskData, width, height);
-
-      const outputCanvas = outputCanvasRef.current;
-
-      outputCanvas.width = width;
-      outputCanvas.height = height;
-
-      const ctx = outputCanvas.getContext("2d");
-
-      ctx.clearRect(0, 0, width, height);
-
-      // Draw original image
-      ctx.drawImage(currentImage, 0, 0, width, height);
-
-      // Use mask as alpha channel
-      ctx.globalCompositeOperation = "destination-in";
-      ctx.drawImage(maskCanvas, 0, 0);
-      ctx.globalCompositeOperation = "source-over";
-
-      setHasOutput(true);
-
-      const seconds = ((performance.now() - start) / 1000).toFixed(2);
-
-      setStatus(`Done in ${seconds}s`);
-      setStatusMode("ok");
-    } catch (err) {
-      console.error(err);
-      setStatus(`Inference failed: ${err.message}`);
-      setStatusMode("");
-    } finally {
-      setProcessing(false);
-    }
-  }
-
-  function downloadImage() {
-    const canvas = outputCanvasRef.current;
-
-    canvas.toBlob((blob) => {
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download = "removed-" + fileName;
-
-      link.click();
-
-      URL.revokeObjectURL(url);
-    }, "image/png");
-  }
-
-  const dotColor =
-    statusMode === "ok"
-      ? "bg-key"
-      : statusMode === "busy"
-        ? "bg-amber-500 animate-pulse"
-        : "bg-line";
-
   return (
-    <div className="max-w-[960px] mx-auto px-6 pt-12 pb-20">
-      <header className="flex items-baseline justify-between gap-4 mb-9 flex-wrap">
-        <h1 className="text-[22px] font-[650] tracking-tight m-0">
-          Cut<span className="text-key-ink">out</span>
-        </h1>
+    <main className="min-h-screen bg-white text-zinc-900">
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-6 pt-20 pb-24">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="mb-6 inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-500">
+            Free and Secure Background Removing Tool
+          </div>
 
-        <span className="font-mono text-xs text-mute border border-line rounded-md px-2 py-[3px] bg-panel">
-          {model} · runs entirely on-device
-        </span>
-      </header>
+          <h1 className="text-5xl font-semibold tracking-tight sm:text-7xl">
+            Remove backgrounds.
+            <br />
+            <span className="text-zinc-400">Without uploading.</span>
+          </h1>
 
-      <div className="flex items-center gap-2.5 text-[13px] text-mute mb-5 min-h-[20px]">
-        <span className={`w-[7px] h-[7px] rounded-full flex-shrink-0 ${dotColor}`} />
-        <span>{status}</span>
-      </div>
-      <div className="flex items-center gap-2.5 text-[13px] text-mute mb-5 min-h-[20px]">
-        <h1>Model:</h1>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-        >
-          <option value={U2NETP_URL}>U²-NetP (4MB)</option>
-          <option value={SILUETA_URL}>Silueta (43MB)</option>
-        </select>
-      </div>
+          <p className="mx-auto mt-7 max-w-xl text-base leading-7 text-zinc-500 sm:text-lg">
+            Cut out the background from your images using AI that runs
+            directly in your browser. Your images stay on your device.
+          </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* INPUT */}
-        <div className="relative overflow-hidden flex items-center justify-center bg-panel border border-line rounded-[10px] aspect-[4/3]">
-          <span className="absolute top-2.5 left-3 z-[2] font-mono text-[11px] text-mute">
-            input
-          </span>
-
-          {!hasImage && (
-            <label
-              className={`w-full h-full flex flex-col items-center justify-center gap-2.5 cursor-pointer text-center p-6 ${isDragging ? "bg-[#eafaf1]" : ""
-                }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+          <div className="mt-9 flex justify-center">
+            <Link
+              to="/remove"
+              className="rounded-xl bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700"
             >
-              <svg
-                width="34"
-                height="34"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="opacity-[0.35]"
-              >
-                <path d="M12 16V4M12 4l-4 4M12 4l4 4" />
-                <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
-              </svg>
+              Remove a background →
+            </Link>
+          </div>
 
-              <p className="m-0 text-[13.5px] text-mute">
-                Drop an image, or click to choose one
+          <p className="mt-4 text-xs text-zinc-400">
+            No account · No uploads · No nonsense
+          </p>
+        </div>
+      </section>
+
+      {/* Demo */}
+      <section className="border-y border-zinc-100 bg-zinc-50">
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <div className="grid items-center gap-12 md:grid-cols-2">
+            <div>
+              <p className="text-sm font-medium text-zinc-400">
+                SIMPLE BY DESIGN
               </p>
 
-              <small className="font-mono text-[11px] text-mute">
-                runs locally — nothing is uploaded
-              </small>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight">
+                Drop an image.
+                <br />
+                Get a cutout.
+              </h2>
 
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
-          )}
+              <p className="mt-5 max-w-md leading-7 text-zinc-500">
+                Upload an image, choose an AI model, and let your browser do
+                the rest. Download the result as a transparent PNG.
+              </p>
 
-          <canvas
-            ref={inputCanvasRef}
-            className="max-w-full max-h-full block"
-            style={{ display: hasImage ? "block" : "none" }}
-          />
+              <Link
+                to="/remove"
+                className="mt-7 inline-block text-sm font-medium text-zinc-900 underline underline-offset-4"
+              >
+                Try it yourself →
+              </Link>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm">
+              <div className="grid aspect-[4/3] grid-cols-2 overflow-hidden rounded-xl">
+                <div className="relative flex items-center justify-center bg-zinc-100">
+                  <div className="text-center">
+                    {/* <div className="text-4xl">🧑‍💻</div> */}
+                    <div className="text-4xl">
+                      <img
+                        src="../public/KanyeWest.jpg"
+                      />
+                    </div>
+                    <p className="mt-3 text-xs text-zinc-400">
+                      Original
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className="relative flex items-center justify-center"
+                  style={{
+                    backgroundImage: `
+                      linear-gradient(45deg, #eee 25%, transparent 25%),
+                      linear-gradient(-45deg, #eee 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, #eee 75%),
+                      linear-gradient(-45deg, transparent 75%, #eee 75%)
+                    `,
+                    backgroundSize: "20px 20px",
+                    backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0",
+                  }}
+                >
+                  <div className="text-center">
+                    <div className="text-4xl">
+                      <img
+                        src="../public/removed-KanyeWest.png"
+                      />
+                    </div>
+                    <p className="mt-3 text-xs text-zinc-400">
+                      Background removed
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-6 py-24">
+        <div className="max-w-xl">
+          <p className="text-sm font-medium text-zinc-400">
+            WHY USE 'REMOVE THAT BG'?
+          </p>
+
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight">
+            Your browser does everything.
+          </h2>
         </div>
 
-        {/* OUTPUT */}
-        <div className="relative overflow-hidden flex items-center justify-center bg-panel border border-line rounded-[10px] aspect-[4/3] bg-checker">
-          <span className="absolute top-2.5 left-3 z-[2] font-mono text-[11px] text-mute">
-            output
-          </span>
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          <Feature
+            title="Runs locally"
+            text="The AI model runs directly in your browser using ONNX Runtime Web."
+          />
 
-          <canvas
-            ref={outputCanvasRef}
-            className="max-w-full max-h-full block"
-            style={{ display: hasOutput ? "block" : "none" }}
+          <Feature
+            title="Privacy Focussed"
+            text="Your image doesn't need to be uploaded to a server just to remove its background. Its all on your machine."
+          />
+
+          <Feature
+            title="Different Models"
+            text="Choose between different models, based on your needs and quality."
+          />
+          <Feature
+            title="Caching"
+            text="The models download only once, when you first use them. Further, they are cached so you're ready to go within no time."
+          />
+          <Feature
+            title="Max Quality"
+            text="Since everything runs locally, you get the maximum quality of images."
           />
         </div>
-      </div>
+      </section>
 
-      <div className="flex gap-2.5 mt-5 flex-wrap">
-        <button
-          className="font-sans text-[13.5px] font-semibold rounded-[7px] border border-transparent px-[18px] py-[11px] cursor-pointer transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-key text-[#06281a] enabled:hover:bg-[#1ea366]"
-          disabled={!session || !currentImage || processing}
-          onClick={removeBackground}
+      <section className="mx-auto px-6 py-24 text-center bg-zinc-950">
+        <h2 className="text-4xl font-semibold tracking-tight text-white">
+          Ready to cut some backgrounds?
+        </h2>
+
+        <p className="mt-4 text-zinc-500">
+          No signup. No upload queue. Just drop an image.
+        </p>
+
+        <Link
+          to="/remove"
+          className="mt-8 inline-block rounded-xl bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition hover:bg-zinc-700"
         >
-          {processing ? "Removing background…" : "Remove background"}
-        </button>
+          Remove a background →
+        </Link>
+      </section>
 
-        <button
-          className="font-sans text-[13.5px] font-semibold rounded-[7px] border border-line px-[18px] py-[11px] cursor-pointer transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed bg-panel text-ink enabled:hover:bg-[#ebeee9]"
-          disabled={!hasOutput}
-          onClick={downloadImage}
-        >
-          Download PNG
-        </button>
-      </div>
+      {/* Footer */}
+      <footer className="border-t border-zinc-100">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-7 text-xs text-zinc-400">
+          <span>Remove That BG</span>
+          <span></span>
+        </div>
+      </footer>
+    </main>
+  );
+}
 
-      <div className="mt-10 pt-5 border-t border-line text-[12.5px] text-mute leading-relaxed">
-        Model: <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">{model}</code> (fetched once and cached by the browser). Inference runs via{" "}
-        <code className="font-mono bg-panel border border-line px-[5px] py-[1px] rounded">onnxruntime-web</code> on
-        WebAssembly — your image never leaves this device.
-      </div>
+function Feature({ icon, title, text }) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 p-6">
+      <div className="text-xl">{icon}</div>
+
+      <h3 className="mt-5 font-medium">{title}</h3>
+
+      <p className="mt-2 text-sm leading-6 text-zinc-500">
+        {text}
+      </p>
     </div>
   );
 }
