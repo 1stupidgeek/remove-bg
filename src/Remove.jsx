@@ -552,11 +552,17 @@ function Remove() {
             const link =
                 document.createElement("a");
 
+            const newName = "removed-" + fileName.replace(/\.[^.]+$/, "") + ".png";
+
             link.href = url;
-            link.download =
-                "removed-" + fileName;
+            link.download = newName
+
+            console.log(newName)
 
             link.click();
+
+
+            console.log(link)
 
             URL.revokeObjectURL(url);
         }, "image/png");
